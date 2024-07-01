@@ -1,3 +1,6 @@
+use std::fs::File;
+use std::io::Write;
+
 use crate::{
     hashed_cursor::{HashedCursorFactory, HashedStorageCursor},
     node_iter::{AccountNode, AccountNodeIter, StorageNode, StorageNodeIter},
@@ -72,6 +75,8 @@ where
                 }
                 AccountNode::Leaf(hashed_address, account) => {
                     let storage_root = if hashed_address == target_hashed_address {
+                        self.traverse_storage_trie_and_gather_stats(hashed_address).unwrap_or_default();
+
                         let (storage_root, storage_proofs) =
                             self.storage_root_with_proofs(hashed_address, slots)?;
                         account_proof.set_account(account, storage_root, storage_proofs);
@@ -158,6 +163,63 @@ where
         }
 
         Ok((root, proofs))
+    }
+
+
+    /// Traverse the storage trie and gather statistics about leaf node depths.
+    fn traverse_storage_trie_and_gather_stats(
+        &self,
+        hashed_address: B256,
+    ) -> Result<(), StorageRootError> {
+        let mut hashed_storage_cursor = self.hashed_cursor_factory.hashed_storage_cursor()?;
+        // let mut leaf_depth_stats = vec![0; 65]; // Depths 0 to 64
+        // let mut target_nibbles = Vec::new();
+
+        // Short circuit on empty storage
+        if hashed_storage_cursor.is_storage_empty(hashed_address)? {
+            // return Ok(leaf_depth_stats);
+            return Ok(())
+        }
+
+        let mut file = File::create("/home/reth/foo.txt").unwrap(); // this path is for docker
+
+        let trie_cursor = DatabaseStorageTrieCursor::new(
+            self.tx.cursor_dup_read::<tables::StoragesTrie>()?,
+            hashed_address,
+        );
+        let walker = TrieWalker::new_can_skip(trie_cursor);
+
+        // let mut hash_builder = HashBuilder::default().with_proof_retainer(target_nibbles.clone());
+        let mut storage_node_iter =
+            StorageNodeIter::new(walker, hashed_storage_cursor, hashed_address);
+        while let Some(node) = storage_node_iter.try_next()? {
+            match node {
+                StorageNode::Branch(_) => {
+                    // hash_builder.add_branch(node.key, node.value, node.children_are_in_trie);
+                }
+                StorageNode::Leaf(hashed_slot, value) => {
+                    // let nibbles = Nibbles::unpack(hashed_slot);
+                    // target_nibbles.push(nibbles.clone());
+                    writeln!(&mut file, "\"{:?}\": {:?}", hashed_slot, alloy_rlp::encode_fixed_size(&value).as_ref()).unwrap();
+                    // hash_builder.add_leaf(nibbles, alloy_rlp::encode_fixed_size(&value).as_ref());
+                }
+            }
+        }
+
+        // hash_builder.root();
+        // let all_proof_nodes = hash_builder.take_proofs();
+
+        // for s in target_nibbles {
+        //     let depth = all_proof_nodes
+        //         .iter()
+        //         .filter(|(path, _)| s.starts_with(path))
+        //         .collect::<Vec<_>>().len();
+
+        //     leaf_depth_stats[depth] += 1;
+        // }
+
+        Ok(())
+        // Ok(leaf_depth_stats)
     }
 }
 

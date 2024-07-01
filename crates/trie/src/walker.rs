@@ -26,6 +26,7 @@ pub struct TrieWalker<C> {
     pub changes: PrefixSet,
     /// The trie updates to be applied to the trie.
     trie_updates: Option<TrieUpdates>,
+    cannot_skip: bool,
 }
 
 impl<C: TrieCursor> TrieWalker<C> {
@@ -38,6 +39,7 @@ impl<C: TrieCursor> TrieWalker<C> {
             stack: vec![CursorSubNode::default()],
             can_skip_current_node: false,
             trie_updates: None,
+            cannot_skip: false
         };
 
         // Set up the root node of the trie in the stack, if it exists.
@@ -53,7 +55,29 @@ impl<C: TrieCursor> TrieWalker<C> {
     /// Constructs a new TrieWalker from existing stack and a cursor.
     pub fn from_stack(cursor: C, stack: Vec<CursorSubNode>, changes: PrefixSet) -> Self {
         let mut this =
-            Self { cursor, changes, stack, can_skip_current_node: false, trie_updates: None };
+            Self { cursor, changes, stack, can_skip_current_node: false, trie_updates: None, cannot_skip: false};
+        this.update_skip_node();
+        this
+    }
+
+    /// Constructs a new TrieWalker with cannot_skip flag true
+    pub fn new_can_skip(cursor: C) -> Self {
+        // Initialize the walker with a single empty stack element.
+        let mut this = Self {
+            cursor,
+            changes: PrefixSet::default(),
+            stack: vec![CursorSubNode::default()],
+            can_skip_current_node: false,
+            trie_updates: None,
+            cannot_skip: true
+        };
+
+        // Set up the root node of the trie in the stack, if it exists.
+        if let Some((key, value)) = this.node(true).unwrap() {
+            this.stack[0] = CursorSubNode::new(key, Some(value));
+        }
+
+        // Update the skip state for the root node.
         this.update_skip_node();
         this
     }
@@ -234,6 +258,10 @@ impl<C: TrieCursor> TrieWalker<C> {
 
     /// Updates the skip node flag based on the walker's current state.
     fn update_skip_node(&mut self) {
+        if self.cannot_skip {
+            self.can_skip_current_node = false;
+            return;
+        }
         self.can_skip_current_node = self
             .stack
             .last()
