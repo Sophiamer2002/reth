@@ -1,4 +1,4 @@
-use std::fs::File;
+use std::{collections::HashMap, fs::File};
 use std::io::Write;
 
 use crate::{
@@ -181,6 +181,8 @@ where
             return Ok(())
         }
 
+        let mut kv_pair = HashMap::new();
+
         let mut file = File::create("/home/reth/foo.txt").unwrap(); // this path is for docker
 
         let trie_cursor = DatabaseStorageTrieCursor::new(
@@ -200,7 +202,7 @@ where
                 StorageNode::Leaf(hashed_slot, value) => {
                     // let nibbles = Nibbles::unpack(hashed_slot);
                     // target_nibbles.push(nibbles.clone());
-                    writeln!(&mut file, "\"{:?}\": {:?}", hashed_slot, alloy_rlp::encode_fixed_size(&value).as_ref()).unwrap();
+                    kv_pair.insert(hashed_slot.clone(), value.clone());
                     // hash_builder.add_leaf(nibbles, alloy_rlp::encode_fixed_size(&value).as_ref());
                 }
             }
@@ -217,6 +219,10 @@ where
 
         //     leaf_depth_stats[depth] += 1;
         // }
+
+        kv_pair.into_iter().for_each(|(k, v)| {
+            writeln!(&mut file, "\"{:?}\": {:?}", k, alloy_rlp::encode_fixed_size(&v).as_ref()).unwrap();
+        });
 
         Ok(())
         // Ok(leaf_depth_stats)
