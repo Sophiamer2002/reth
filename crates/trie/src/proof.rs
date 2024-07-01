@@ -1,4 +1,4 @@
-use std::{collections::HashMap, fs::File};
+use std::fs::File;
 use std::io::Write;
 
 use crate::{
@@ -181,7 +181,7 @@ where
             return Ok(())
         }
 
-        let mut kv_pair = HashMap::new();
+        let mut kv_pairs = Vec::new();
 
         let mut file = File::create("/home/reth/foo.txt").unwrap(); // this path is for docker
 
@@ -202,7 +202,7 @@ where
                 StorageNode::Leaf(hashed_slot, value) => {
                     // let nibbles = Nibbles::unpack(hashed_slot);
                     // target_nibbles.push(nibbles.clone());
-                    kv_pair.insert(hashed_slot.clone(), value.clone());
+                    kv_pairs.push((hashed_slot, value));
                     // hash_builder.add_leaf(nibbles, alloy_rlp::encode_fixed_size(&value).as_ref());
                 }
             }
@@ -220,9 +220,16 @@ where
         //     leaf_depth_stats[depth] += 1;
         // }
 
-        kv_pair.into_iter().for_each(|(k, v)| {
-            writeln!(&mut file, "\"{:?}\": {:?}", k, alloy_rlp::encode_fixed_size(&v).as_ref()).unwrap();
+        // write in json format
+        writeln!(&mut file, "{{").unwrap();
+        let len = kv_pairs.len();
+        kv_pairs.into_iter().enumerate().for_each(|(i, (k, v))| {
+            write!(&mut file, "\t\"{:?}\": {:?}", k, alloy_rlp::encode_fixed_size(&v).as_ref()).unwrap();
+            if i != len - 1 {
+                writeln!(&mut file, ",").unwrap();
+            }
         });
+        writeln!(&mut file, "\n}}").unwrap();
 
         Ok(())
         // Ok(leaf_depth_stats)
